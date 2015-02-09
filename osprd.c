@@ -140,13 +140,17 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 		sectors = req->current_nr_sectors * SECTOR_SIZE;
 	}
 
-	if (rq_data_dir(req) == READ)
+	if (rq_data_dir(req) == READ) //read
 	{
 		memcpy(req->buffer, (d->data+req->sector*SECTOR_SIZE), sectors);
 	}
-	else //request to write
+	else if (rq_data_dir(req) == WRITE) //write
 	{
 		memcpy((d->data+req->sector*SECTOR_SIZE), req->buffer, sectors);
+	}
+	else //unknown request
+	{
+		eprintk("Not READ or WRITE request");
 	}
 
 	end_request(req, 1);
@@ -218,7 +222,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// to write-lock the ramdisk; otherwise attempt to read-lock
 		// the ramdisk.
 		//
-                // This lock request must block using 'd->blockq' until:
+        // This lock request must block using 'd->blockq' until:
 		// 1) no other process holds a write lock;
 		// 2) either the request is for a read lock, or no other process
 		//    holds a read lock; and
