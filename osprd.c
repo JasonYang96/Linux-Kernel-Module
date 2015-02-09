@@ -34,7 +34,7 @@
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_DESCRIPTION("CS 111 RAM Disk");
 // EXERCISE: Pass your names into the kernel as the module's authors.
-MODULE_AUTHOR("Skeletor");
+MODULE_AUTHOR("Jason Yang and Kelly Ou");
 
 #define OSPRD_MAJOR	222
 
@@ -107,6 +107,8 @@ static void for_each_open_file(struct task_struct *task,
  */
 static void osprd_process_request(osprd_info_t *d, struct request *req)
 {
+	size_t sectors;
+
 	if (!blk_fs_request(req)) {
 		end_request(req, 0);
 		return;
@@ -120,8 +122,32 @@ static void osprd_process_request(osprd_info_t *d, struct request *req)
 	// Consider the 'req->sector', 'req->current_nr_sectors', and
 	// 'req->buffer' members, and the rq_data_dir() function.
 
-	// Your code here.
-	eprintk("Should process request...\n");
+	//check if invalid req->sector
+	if (req->sector >= nsectors || req->sector < 0)
+	{
+		eprintk("Invalid req->sector, >= nsectors or < 0");
+		end_request(req,0);
+	}
+
+	//if # of sectors would write/read off disk
+	if (req->sector + req->current_nr_sectors > nsectors)
+	{
+		sectors = (nsectors - req->sector) * SECTOR_SIZE;
+		eprintk("Only using %u sectors", nsectors - req->sector);
+	}
+	else //# of sectors can be written/read
+	{
+		sectors = req->current_nr_sectors * SECTOR_SIZE;
+	}
+
+	if (rq_data_dir(req) == READ)
+	{
+		memcpy(req->buffer, (d->data+req->sector*SECTOR_SIZE), sectors);
+	}
+	else //request to write
+	{
+		memcpy((d->data+req->sector*SECTOR_SIZE), req->buffer, sectors);
+	}
 
 	end_request(req, 1);
 }
