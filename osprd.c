@@ -185,6 +185,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		// as appropriate.
 		if (d->read_locks > 0 || d->write_locks > 0)
 		{
+			eprintk("read-lock:%d, write_locks:%d, filp_writable:%d\n", d->read_locks, d->write_locks, filp_writable);
 			if (filp_writable)
 			{
 				eprintk("Attempting to remove write_lock\n");
@@ -296,7 +297,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			osp_spin_unlock(&d->mutex);
 			eprintk("Received read-lock, read_locks:%d\n", d->read_locks);
 		}
-
 		r = 0;
 
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
@@ -308,9 +308,30 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// OSPRDIOCTRYACQUIRE should return -EBUSY.
 		// Otherwise, if we can grant the lock request, return 0.
 
-		// Your code here (instead of the next two lines).
-		eprintk("Attempting to try acquire\n");
-		r = -ENOTTY;
+		if (d->read_locks > 0 || d->write_locks > 0)
+		{
+			return -EBUSY;
+		}
+
+		if (filp_writable)
+		{
+			eprintk("Attempting to write_lock\n");
+			osp_spin_lock(&d->mutex);
+			d->write_locks++;
+			filp->f_flags |= F_OSPRD_LOCKED;
+			osp_spin_unlock(&d->mutex);
+			eprintk("Received write_lock, write_locks:%d\n", d->write_locks);
+		}
+		else
+		{
+			eprintk("Attempting to read_lock\n");
+			osp_spin_lock(&d->mutex);
+			d->read_locks++;
+			filp->f_flags |= F_OSPRD_LOCKED;
+			osp_spin_unlock(&d->mutex);
+			eprintk("Received read-lock, read_locks:%d\n", d->read_locks);
+		}
+		r = 0;
 
 	} else if (cmd == OSPRDIOCRELEASE) {
 
@@ -324,6 +345,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// Your code here (instead of the next line).
 		if (d->read_locks > 0 || d->write_locks > 0)
 		{
+			eprintk("read-lock:%d, write_locks:%d, filp_writable:%d\n", d->read_locks, d->write_locks, filp_writable);
 			if (filp_writable)
 			{
 				eprintk("Attempting to remove write_lock\n");
