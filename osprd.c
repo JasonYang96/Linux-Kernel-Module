@@ -190,6 +190,11 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			{
 				eprintk("Attempting to remove write_lock\n");
 				osp_spin_lock(&d->mutex);
+				if (d->ticket_head < d->ticket_tail)
+				{
+					d->ticket_head++;
+				}
+				eprintk("ticket_head:%u\n", d->ticket_head);
 				d->write_locks--;
 				filp->f_flags ^= F_OSPRD_LOCKED;
 				osp_spin_unlock(&d->mutex);
@@ -200,6 +205,11 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			{
 				eprintk("Attempting to remove read_lock\n");
 				osp_spin_lock(&d->mutex);
+				if (d->ticket_head < d->ticket_tail)
+				{
+					d->ticket_head++;
+				}
+				eprintk("ticket_head:%u\n", d->ticket_head);
 				d->read_locks--;
 				filp->f_flags ^= F_OSPRD_LOCKED;
 				osp_spin_unlock(&d->mutex);
@@ -230,6 +240,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 {
 	osprd_info_t *d = file2osprd(filp);	// device info
 	int r = 0;			// return value: initially 0
+	unsigned ticket_local;
 
 	// is file open for writing?
 	int filp_writable = (filp->f_mode & FMODE_WRITE) != 0;
@@ -280,7 +291,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		if (filp_writable)
 		{
 			eprintk("Attempting to write_lock\n");
-			wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0);
+			ticket_local = d->ticket_tail;
+			d->ticket_tail++;
+			eprintk("ticket_tail:%u\n", d->ticket_tail);
+			wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
 			d->write_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
@@ -290,7 +304,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		else
 		{
 			eprintk("Attempting to read_lock\n");
-			wait_event_interruptible(d->blockq, d->write_locks == 0);
+			ticket_local = d->ticket_tail;
+			d->ticket_tail++;
+			eprintk("ticket_tail:%u\n", d->ticket_tail);
+			wait_event_interruptible(d->blockq, d->write_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
 			d->read_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
@@ -350,6 +367,11 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			{
 				eprintk("Attempting to remove write_lock\n");
 				osp_spin_lock(&d->mutex);
+				if (d->ticket_head < d->ticket_tail)
+				{
+					d->ticket_head++;
+				}
+				eprintk("ticket_head:%u\n", d->ticket_head);
 				d->write_locks--;
 				filp->f_flags ^= F_OSPRD_LOCKED;
 				osp_spin_unlock(&d->mutex);
@@ -360,6 +382,11 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			{
 				eprintk("Attempting to remove read_lock\n");
 				osp_spin_lock(&d->mutex);
+				if (d->ticket_head < d->ticket_tail)
+				{
+					d->ticket_head++;
+				}
+				eprintk("ticket_head:%u\n", d->ticket_head);
 				d->read_locks--;
 				filp->f_flags ^= F_OSPRD_LOCKED;
 				osp_spin_unlock(&d->mutex);
