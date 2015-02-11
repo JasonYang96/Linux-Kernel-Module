@@ -211,13 +211,12 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 				}
 			}
 			eprintk("ticket_head:%u\n", d->ticket_head);
-			osp_spin_unlock(&d->mutex);
 			wake_up_all(&d->blockq);
+			osp_spin_unlock(&d->mutex);
 		}
 		else
 		{
 			eprintk("Attempting to remove read_lock\n");
-			osp_spin_lock(&d->mutex);
 			d->read_locks--;
 			eprintk("Removed read-lock, read_locks:%d\n", d->read_locks);
 			filp->f_flags ^= F_OSPRD_LOCKED;
@@ -230,8 +229,8 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 				}
 			}
 			eprintk("ticket_head:%u\n", d->ticket_head);
-			osp_spin_unlock(&d->mutex);
 			wake_up_all(&d->blockq);
+			osp_spin_unlock(&d->mutex);
 		}
 
 		// This line avoids compiler warnings; you may remove it.
@@ -315,8 +314,8 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_unlock(&d->mutex);
 				return -EDEADLK;
 			}
-			osp_spin_unlock(&d->mutex);
 			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
+			osp_spin_unlock(&d->mutex);
 			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
 			if (r == -ERESTARTSYS)
@@ -430,13 +429,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				}
 			}
 			eprintk("ticket_head:%u\n", d->ticket_head);
-			osp_spin_unlock(&d->mutex);
 			wake_up_all(&d->blockq);
+			osp_spin_unlock(&d->mutex);
 		}
 		else
 		{
 			eprintk("Attempting to remove read_lock\n");
-			osp_spin_lock(&d->mutex);
 			d->read_locks--;
 			eprintk("Removed read-lock, read_locks:%d\n", d->read_locks);
 			filp->f_flags ^= F_OSPRD_LOCKED;
@@ -449,8 +447,8 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				}
 			}
 			eprintk("ticket_head:%u\n", d->ticket_head);
-			osp_spin_unlock(&d->mutex);
 			wake_up_all(&d->blockq);
+			osp_spin_unlock(&d->mutex);
 		}
 		r = 0;
 
