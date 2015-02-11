@@ -17,6 +17,8 @@
 #include "spinlock.h"
 #include "osprd.h"
 
+#include "ticket_ll.h"
+
 /* The size of an OSPRD sector. */
 #define SECTOR_SIZE	512
 
@@ -43,7 +45,6 @@ MODULE_AUTHOR("Jason Yang and Kelly Ou");
 static int nsectors = 32;
 module_param(nsectors, int, 0);
 
-
 /* The internal representation of our device. */
 typedef struct osprd_info {
 	uint8_t *data;                  // The data array. Its size is
@@ -67,6 +68,7 @@ typedef struct osprd_info {
 	int read_locks;
 	int write_locks;
 	pid_t current_write_pid;
+	ticket_ll_t ticket_ll;
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -200,6 +202,10 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			if (d->ticket_head < d->ticket_tail)
 			{
 				d->ticket_head++;
+				while (remove(&d->ticket_ll, d->ticket_head))
+				{
+					d->ticket_head++;
+				}
 			}
 			eprintk("ticket_head:%u\n", d->ticket_head);
 			osp_spin_unlock(&d->mutex);
@@ -215,6 +221,10 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			if (d->ticket_head < d->ticket_tail)
 			{
 				d->ticket_head++;
+				while (remove(&d->ticket_ll, d->ticket_head))
+				{
+					d->ticket_head++;
+				}
 			}
 			eprintk("ticket_head:%u\n", d->ticket_head);
 			osp_spin_unlock(&d->mutex);
@@ -300,8 +310,14 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			ticket_local = d->ticket_tail;
 			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
-			wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0 && ticket_local == d->ticket_head);
+			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
+			if (r == -ERESTARTSYS)
+			{
+				insert(&d->ticket_ll, ticket_local);
+				osp_spin_unlock(&d->mutex);
+				return r;
+			}
 			d->ticket_tail++;
 			d->write_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
@@ -313,16 +329,20 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			eprintk("Attempting to read_lock\n");
 			ticket_local = d->ticket_tail;
 			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
-			wait_event_interruptible(d->blockq, d->write_locks == 0 && ticket_local == d->ticket_head);
+			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
+			if (r == -ERESTARTSYS)
+			{
+				insert(&d->ticket_ll, ticket_local);
+				osp_spin_unlock(&d->mutex);
+				return r;
+			}
 			d->ticket_tail++;
 			d->read_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
 			eprintk("Received read-lock, read_locks:%d, ticket_local: %u\n", d->read_locks, ticket_local);
 		}
-		r = 0;
-
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -370,39 +390,50 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// you need, and return 0.
 
 		// Your code here (instead of the next line).
-		if (d->read_locks > 0 || d->write_locks > 0)
+		if ((d->read_locks == 0 && d->write_locks == 0) || !(filp->f_flags & F_OSPRD_LOCKED))
 		{
-			eprintk("read-lock:%d, write_locks:%d, filp_writable:%d\n", d->read_locks, d->write_locks, filp_writable);
-			if (filp_writable)
+			return 0;
+		}
+
+		eprintk("read-lock:%d, write_locks:%d, filp_writable:%d\n", d->read_locks, d->write_locks, filp_writable);
+		if (filp_writable)
+		{
+			eprintk("Attempting to remove write_lock\n");
+			osp_spin_lock(&d->mutex);
+			d->write_locks--;
+			d->current_write_pid = -1;
+			eprintk("Removed write-lock, write_locks:%d\n", d->write_locks);
+			filp->f_flags ^= F_OSPRD_LOCKED;
+			if (d->ticket_head < d->ticket_tail)
 			{
-				eprintk("Attempting to remove write_lock\n");
-				osp_spin_lock(&d->mutex);
-				d->write_locks--;
-				eprintk("Removed write-lock, write_locks:%d\n", d->write_locks);
-				filp->f_flags ^= F_OSPRD_LOCKED;
-				if (d->ticket_head < d->ticket_tail)
+				d->ticket_head++;
+				while (remove(&d->ticket_ll, d->ticket_head))
 				{
 					d->ticket_head++;
 				}
-				eprintk("ticket_head:%u\n", d->ticket_head);
-				osp_spin_unlock(&d->mutex);
-				wake_up_all(&d->blockq);
 			}
-			else
+			eprintk("ticket_head:%u\n", d->ticket_head);
+			osp_spin_unlock(&d->mutex);
+			wake_up_all(&d->blockq);
+		}
+		else
+		{
+			eprintk("Attempting to remove read_lock\n");
+			osp_spin_lock(&d->mutex);
+			d->read_locks--;
+			eprintk("Removed read-lock, read_locks:%d\n", d->read_locks);
+			filp->f_flags ^= F_OSPRD_LOCKED;
+			if (d->ticket_head < d->ticket_tail)
 			{
-				eprintk("Attempting to remove read_lock\n");
-				osp_spin_lock(&d->mutex);
-				d->read_locks--;
-				eprintk("Removed read-lock, read_locks:%d\n", d->read_locks);
-				filp->f_flags ^= F_OSPRD_LOCKED;
-				if (d->ticket_head < d->ticket_tail)
+				d->ticket_head++;
+				while (remove(&d->ticket_ll, d->ticket_head))
 				{
 					d->ticket_head++;
 				}
-				eprintk("ticket_head:%u\n", d->ticket_head);
-				osp_spin_unlock(&d->mutex);
-				wake_up_all(&d->blockq);
 			}
+			eprintk("ticket_head:%u\n", d->ticket_head);
+			osp_spin_unlock(&d->mutex);
+			wake_up_all(&d->blockq);
 		}
 		r = 0;
 
