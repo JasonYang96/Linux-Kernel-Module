@@ -22,17 +22,12 @@ void insert_read_node(read_ll_t* head, pid_t p)
 	read_ll_t *current_node = head;
 	read_ll_t *node = new_read_node(p);
 
-	//first node
-	if(current_node == NULL) {
-		head = node;
-		return;
-	}
-
 	//move to end of list
 	while(current_node->next != NULL)
 		current_node = current_node->next;
 
 	current_node->next = node;
+	return;
 }
 
 bool remove_read_node(read_ll_t *head, pid_t p)

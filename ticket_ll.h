@@ -22,17 +22,12 @@ void insert_ticket_node(ticket_ll_t* head, unsigned t)
 	ticket_ll_t *current_node = head;
 	ticket_ll_t *node = new_ticket_node(t);
 
-	//first node
-	if(current_node == NULL) {
-		head = node;
-		return;
-	}
-
 	//move to end of list
 	while(current_node->next != NULL)
 		current_node = current_node->next;
 
 	current_node->next = node;
+	return;
 }
 
 bool remove_ticket_node(ticket_ll_t *head, unsigned t)
