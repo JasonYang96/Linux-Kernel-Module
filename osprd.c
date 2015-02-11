@@ -301,6 +301,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
+		ticket_local = d->ticket_tail++;
 		if (filp_writable)
 		{
 			eprintk("Attempting to write_lock\n");
@@ -308,7 +309,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			{
 				return -EDEADLK;
 			}
-			ticket_local = d->ticket_tail;
 			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
 			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
@@ -318,7 +318,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_unlock(&d->mutex);
 				return r;
 			}
-			d->ticket_tail++;
 			d->write_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
@@ -327,7 +326,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		else
 		{
 			eprintk("Attempting to read_lock\n");
-			ticket_local = d->ticket_tail;
 			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
 			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
@@ -337,7 +335,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_unlock(&d->mutex);
 				return r;
 			}
-			d->ticket_tail++;
 			d->read_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
