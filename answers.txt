@@ -20,3 +20,4 @@ kellio94@g.ucla.edu
 
 
 # Add any other information you'd like us to have below this line.
+We have working implementations that should pass all 17 tests, or at least when we tried to on a ubuntu virtual machine.
