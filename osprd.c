@@ -18,6 +18,7 @@
 #include "osprd.h"
 
 #include "ticket_ll.h"
+#include "read_ll.h"
 
 /* The size of an OSPRD sector. */
 #define SECTOR_SIZE	512
@@ -68,7 +69,8 @@ typedef struct osprd_info {
 	int read_locks;
 	int write_locks;
 	pid_t current_write_pid;
-	ticket_ll_t ticket_ll;
+	ticket_ll_t *ticket_ll;
+	read_ll_t *read_ll;
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -202,7 +204,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			if (d->ticket_head < d->ticket_tail)
 			{
 				d->ticket_head++;
-				while (remove(&d->ticket_ll, d->ticket_head))
+				while (remove_ticket_node(d->ticket_ll, d->ticket_head))
 				{
 					d->ticket_head++;
 				}
@@ -221,7 +223,7 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			if (d->ticket_head < d->ticket_tail)
 			{
 				d->ticket_head++;
-				while (remove(&d->ticket_ll, d->ticket_head))
+				while (remove_ticket_node(d->ticket_ll, d->ticket_head))
 				{
 					d->ticket_head++;
 				}
@@ -301,20 +303,22 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		// be protected by a spinlock; which ones?)
 
 		// Your code here (instead of the next two lines).
+		osp_spin_lock(&d->mutex);
 		ticket_local = d->ticket_tail++;
 		if (filp_writable)
 		{
 			eprintk("Attempting to write_lock\n");
 			if (d->current_write_pid == current->pid)
 			{
+				insert_ticket_node(d->ticket_ll, ticket_local);
+				osp_spin_unlock(&d->mutex);
 				return -EDEADLK;
 			}
 			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
 			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0 && ticket_local == d->ticket_head);
-			osp_spin_lock(&d->mutex);
 			if (r == -ERESTARTSYS)
 			{
-				insert(&d->ticket_ll, ticket_local);
+				insert_ticket_node(d->ticket_ll, ticket_local);
 				osp_spin_unlock(&d->mutex);
 				return r;
 			}
@@ -326,12 +330,21 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		else
 		{
 			eprintk("Attempting to read_lock\n");
+			if (remove_read_node(d->read_ll, current->pid))
+			{
+				insert_ticket_node(d->ticket_ll, ticket_local);
+				osp_spin_unlock(&d->mutex);
+				return -EDEADLK;
+			}
+			else
+			{
+				insert_read_node(d->read_ll, current->pid);
+			}
 			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
 			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && ticket_local == d->ticket_head);
-			osp_spin_lock(&d->mutex);
 			if (r == -ERESTARTSYS)
 			{
-				insert(&d->ticket_ll, ticket_local);
+				insert_ticket_node(d->ticket_ll, ticket_local);
 				osp_spin_unlock(&d->mutex);
 				return r;
 			}
@@ -404,7 +417,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (d->ticket_head < d->ticket_tail)
 			{
 				d->ticket_head++;
-				while (remove(&d->ticket_ll, d->ticket_head))
+				while (remove_ticket_node(d->ticket_ll, d->ticket_head))
 				{
 					d->ticket_head++;
 				}
@@ -423,7 +436,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			if (d->ticket_head < d->ticket_tail)
 			{
 				d->ticket_head++;
-				while (remove(&d->ticket_ll, d->ticket_head))
+				while (remove_ticket_node(d->ticket_ll, d->ticket_head))
 				{
 					d->ticket_head++;
 				}
@@ -452,6 +465,10 @@ static void osprd_setup(osprd_info_t *d)
 	d->read_locks = 0;
 	d->write_locks = 0;
 	d->current_write_pid = -1;
+	d->read_ll = kmalloc(sizeof(read_ll_t), GFP_ATOMIC);
+	d->read_ll = NULL;
+	d->ticket_ll = kmalloc(sizeof(ticket_ll_t), GFP_ATOMIC);
+	d->ticket_ll = NULL;
 }
 
 

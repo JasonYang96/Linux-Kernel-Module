@@ -1,26 +1,26 @@
-#ifndef TICKET_LL
-#define TICKET_LL
+#ifndef READ_LL
+#define READ_LL
 
 #include <stdbool.h>
 #include <linux/slab.h>
 
-typedef struct ticket_ll {
-	unsigned ticket;
-	struct ticket_ll* next;
-} ticket_ll_t;
+typedef struct read_ll {
+	pid_t pid;
+	struct read_ll* next;
+} read_ll_t;
 
-ticket_ll_t* new_ticket_node(unsigned t)
+read_ll_t* new_read_node(pid_t p)
 {
-	ticket_ll_t *new_node = kmalloc(sizeof(ticket_ll_t), GFP_ATOMIC);
-	new_node->ticket = t;
+	read_ll_t *new_node = kmalloc(sizeof(read_ll_t), GFP_ATOMIC);
+	new_node->pid = p;
 	new_node->next = NULL;
 	return new_node;
 }
 
-void insert_ticket_node(ticket_ll_t* head, unsigned t)
+void insert_read_node(read_ll_t* head, pid_t p)
 {
-	ticket_ll_t *current_node = head;
-	ticket_ll_t *node = new_ticket_node(t);
+	read_ll_t *current_node = head;
+	read_ll_t *node = new_read_node(p);
 
 	//first node
 	if(current_node == NULL) {
@@ -35,15 +35,15 @@ void insert_ticket_node(ticket_ll_t* head, unsigned t)
 	current_node->next = node;
 }
 
-bool remove_ticket_node(ticket_ll_t *head, unsigned t)
+bool remove_read_node(read_ll_t *head, pid_t p)
 {
-	ticket_ll_t *current_node, *last_node;
+	read_ll_t *current_node, *last_node;
 
 	if(head == NULL)
 		return false;
 
 	//if ticket was head ticket
-	if(head->ticket == t)
+	if(head->pid == p)
 	{
 		current_node = head;
 		head = head->next;
@@ -54,7 +54,7 @@ bool remove_ticket_node(ticket_ll_t *head, unsigned t)
 	current_node = last_node = head;
 	while((current_node = current_node->next) != NULL)
 	{
-		if(current_node->ticket == t)
+		if(current_node->pid == p)
 		{
 			last_node->next = current_node->next;
 			kfree(current_node);
@@ -68,9 +68,9 @@ bool remove_ticket_node(ticket_ll_t *head, unsigned t)
 	return false;
 }
 
-void free_all_ticket_node(ticket_ll_t *head)
+void free_all_read_nodes(read_ll_t *head)
 {
-	while (remove_ticket_node(head, head->ticket))
+	while (remove_read_node(head, head->pid))
 	{
 
 	}
