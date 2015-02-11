@@ -67,6 +67,7 @@ typedef struct osprd_info {
 
 	int read_locks;
 	int write_locks;
+	pid_t current_write_lock;
 
 	// The following elements are used internally; you don't need
 	// to understand them.
@@ -295,9 +296,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
 			d->ticket_tail++;
 			wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0 && ticket_local == d->ticket_head);
+			if(getpid() == d->current_write_lock)
+				return -EDEADLK;
 			osp_spin_lock(&d->mutex);
 			d->write_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
+			d->current_write_lock = getpid();
 			osp_spin_unlock(&d->mutex);
 			eprintk("Received write_lock, write_locks:%d, ticket_local:%u\n", d->write_locks, ticket_local);
 		}
@@ -332,7 +336,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 
 		if (filp_writable)
 		{
-			eprintk("Attempting to write_lock\n");
+			eprintk("Attempting to try to write_lock\n");
 			osp_spin_lock(&d->mutex);
 			d->write_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
@@ -341,7 +345,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		}
 		else
 		{
-			eprintk("Attempting to read_lock\n");
+			eprintk("Attempting to try to read_lock\n");
 			osp_spin_lock(&d->mutex);
 			d->read_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
@@ -413,6 +417,7 @@ static void osprd_setup(osprd_info_t *d)
 	/* Add code here if you add fields to osprd_info_t. */
 	d->read_locks = 0;
 	d->write_locks = 0;
+	d->current_write_lock = getpid();
 }
 
 
