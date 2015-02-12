@@ -21,3 +21,9 @@ kellio94@g.ucla.edu
 
 # Add any other information you'd like us to have below this line.
 We have working implementations that should pass all 17 tests, or at least when we tried to on a ubuntu virtual machine.
+
+To test for simple deadlock cases, we ran these commands:
+#for write deadlock
+./osprdaccess -w -l hello.txt hello.txt
+#for read deadlock
+./osprdaccess -r -l hello.txt hello.txt

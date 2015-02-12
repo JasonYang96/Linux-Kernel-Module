@@ -63,12 +63,4 @@ bool remove_ticket_node(ticket_ll_t *head, unsigned t)
 	return false;
 }
 
-void free_all_ticket_node(ticket_ll_t *head)
-{
-	while (remove_ticket_node(head, head->ticket))
-	{
-
-	}
-}
-
 #endif

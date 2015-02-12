@@ -63,12 +63,4 @@ bool remove_read_node(read_ll_t *head, pid_t p)
 	return false;
 }
 
-void free_all_read_nodes(read_ll_t *head)
-{
-	while (remove_read_node(head, head->pid))
-	{
-
-	}
-}
-
 #endif
