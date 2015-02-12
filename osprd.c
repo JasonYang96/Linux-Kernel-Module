@@ -194,13 +194,10 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 			return -EINVAL;
 		}
 
-		eprintk("read-lock:%d, write_locks:%d, filp_writable:%d\n", d->read_locks, d->write_locks, filp_writable);
 		if (filp_writable)
 		{
-			eprintk("Attempting to remove write_lock\n");
 			d->write_locks--;
 			d->current_write_pid = -1;
-			eprintk("Removed write-lock, write_locks:%d\n", d->write_locks);
 			filp->f_flags ^= F_OSPRD_LOCKED;
 			if (d->ticket_head < d->ticket_tail)
 			{
@@ -210,15 +207,12 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 					d->ticket_head++;
 				}
 			}
-			eprintk("ticket_head:%u\n", d->ticket_head);
 			wake_up_all(&d->blockq);
 			osp_spin_unlock(&d->mutex);
 		}
 		else
 		{
-			eprintk("Attempting to remove read_lock\n");
 			d->read_locks--;
-			eprintk("Removed read-lock, read_locks:%d\n", d->read_locks);
 			filp->f_flags ^= F_OSPRD_LOCKED;
 			if (d->ticket_head < d->ticket_tail)
 			{
@@ -228,7 +222,6 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 					d->ticket_head++;
 				}
 			}
-			eprintk("ticket_head:%u\n", d->ticket_head);
 			wake_up_all(&d->blockq);
 			osp_spin_unlock(&d->mutex);
 		}
@@ -307,15 +300,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		ticket_local = d->ticket_tail++;
 		if (filp_writable)
 		{
-			eprintk("Attempting to write_lock\n");
 			if (d->current_write_pid == current->pid)
 			{
-				eprintk("Current process trying to write lock itself!");
 				insert_ticket_node(d->ticket_ll, ticket_local);
 				osp_spin_unlock(&d->mutex);
 				return -EDEADLK;
 			}
-			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
 			osp_spin_unlock(&d->mutex);
 			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && d->read_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
@@ -329,14 +319,11 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			filp->f_flags |= F_OSPRD_LOCKED;
 			d->current_write_pid = current->pid;
 			osp_spin_unlock(&d->mutex);
-			eprintk("Received write_lock, write_locks:%d, ticket_local:%u\n", d->write_locks, ticket_local);
 		}
 		else
 		{
-			eprintk("Attempting to read_lock\n");
 			if (remove_read_node(d->read_ll, current->pid))
 			{
-				eprintk("Current process tyring to read_lock itself");
 				insert_ticket_node(d->ticket_ll, ticket_local);
 				osp_spin_unlock(&d->mutex);
 				return -EDEADLK;
@@ -346,7 +333,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				insert_read_node(d->read_ll, current->pid);
 				osp_spin_unlock(&d->mutex);
 			}
-			eprintk("ticket_tail %u given to lock\n", d->ticket_tail);
 			r = wait_event_interruptible(d->blockq, d->write_locks == 0 && ticket_local == d->ticket_head);
 			osp_spin_lock(&d->mutex);
 			if (r == -ERESTARTSYS)
@@ -358,7 +344,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			d->read_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
-			eprintk("Received read-lock, read_locks:%d, ticket_local: %u\n", d->read_locks, ticket_local);
 		}
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
@@ -377,11 +362,9 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_unlock(&d->mutex);
 				return -EBUSY;
 			}
-			eprintk("Attempting to try to write_lock\n");
 			d->write_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
-			eprintk("Received write_lock, write_locks:%d\n", d->write_locks);
 		}
 		else
 		{
@@ -390,11 +373,9 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				osp_spin_unlock(&d->mutex);
 				return -EBUSY;
 			}
-			eprintk("Attempting to try to read_lock\n");
 			d->read_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
-			eprintk("Received read-lock, read_locks:%d\n", d->read_locks);
 		}
 		r = 0;
 
@@ -415,13 +396,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			return -EINVAL;
 		}
 
-		eprintk("read-lock:%d, write_locks:%d, filp_writable:%d\n", d->read_locks, d->write_locks, filp_writable);
 		if (filp_writable)
 		{
-			eprintk("Attempting to remove write_lock\n");
 			d->write_locks--;
 			d->current_write_pid = -1;
-			eprintk("Removed write-lock, write_locks:%d\n", d->write_locks);
 			filp->f_flags ^= F_OSPRD_LOCKED;
 			if (d->ticket_head < d->ticket_tail)
 			{
@@ -431,15 +409,12 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 					d->ticket_head++;
 				}
 			}
-			eprintk("ticket_head:%u\n", d->ticket_head);
 			wake_up_all(&d->blockq);
 			osp_spin_unlock(&d->mutex);
 		}
 		else
 		{
-			eprintk("Attempting to remove read_lock\n");
 			d->read_locks--;
-			eprintk("Removed read-lock, read_locks:%d\n", d->read_locks);
 			filp->f_flags ^= F_OSPRD_LOCKED;
 			if (d->ticket_head < d->ticket_tail)
 			{
@@ -449,7 +424,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 					d->ticket_head++;
 				}
 			}
-			eprintk("ticket_head:%u\n", d->ticket_head);
 			wake_up_all(&d->blockq);
 			osp_spin_unlock(&d->mutex);
 		}
