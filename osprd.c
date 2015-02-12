@@ -198,39 +198,26 @@ static int osprd_close_last(struct inode *inode, struct file *filp)
 		{
 			d->write_locks--;
 			d->current_write_pid = -1;
-			filp->f_flags ^= F_OSPRD_LOCKED;
-			if (d->ticket_head < d->ticket_tail)
-			{
-				d->ticket_head++;
-				while (remove_ticket_node(d->ticket_ll, d->ticket_head))
-				{
-					d->ticket_head++;
-				}
-			}
-			wake_up_all(&d->blockq);
-			osp_spin_unlock(&d->mutex);
 		}
 		else
 		{
 			d->read_locks--;
-			filp->f_flags ^= F_OSPRD_LOCKED;
-			if (d->ticket_head < d->ticket_tail)
-			{
-				d->ticket_head++;
-				while (remove_ticket_node(d->ticket_ll, d->ticket_head))
-				{
-					d->ticket_head++;
-				}
-			}
-			wake_up_all(&d->blockq);
-			osp_spin_unlock(&d->mutex);
 		}
 
+		if (d->ticket_head < d->ticket_tail)
+		{
+			d->ticket_head++;
+			while (remove_ticket_node(d->ticket_ll, d->ticket_head))
+			{
+				d->ticket_head++;
+			}
+		}
+		wake_up_all(&d->blockq);
+		osp_spin_unlock(&d->mutex);
+		filp->f_flags ^= F_OSPRD_LOCKED;
 		// This line avoids compiler warnings; you may remove it.
 		(void) filp_writable, (void) d;
-
 	}
-
 	return 0;
 }
 
@@ -316,7 +303,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				return r;
 			}
 			d->write_locks++;
-			filp->f_flags |= F_OSPRD_LOCKED;
 			d->current_write_pid = current->pid;
 			osp_spin_unlock(&d->mutex);
 		}
@@ -342,9 +328,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				return r;
 			}
 			d->read_locks++;
-			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
 		}
+		filp->f_flags |= F_OSPRD_LOCKED;
+		return r;
 	} else if (cmd == OSPRDIOCTRYACQUIRE) {
 
 		// EXERCISE: ATTEMPT to lock the ramdisk.
@@ -363,7 +350,6 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				return -EBUSY;
 			}
 			d->write_locks++;
-			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
 		}
 		else
@@ -374,10 +360,10 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 				return -EBUSY;
 			}
 			d->read_locks++;
-			filp->f_flags |= F_OSPRD_LOCKED;
 			osp_spin_unlock(&d->mutex);
 		}
-		r = 0;
+		filp->f_flags |= F_OSPRD_LOCKED;
+		return 0;
 
 	} else if (cmd == OSPRDIOCRELEASE) {
 
@@ -400,37 +386,27 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 		{
 			d->write_locks--;
 			d->current_write_pid = -1;
-			filp->f_flags ^= F_OSPRD_LOCKED;
-			if (d->ticket_head < d->ticket_tail)
-			{
-				d->ticket_head++;
-				while (remove_ticket_node(d->ticket_ll, d->ticket_head))
-				{
-					d->ticket_head++;
-				}
-			}
-			wake_up_all(&d->blockq);
-			osp_spin_unlock(&d->mutex);
 		}
 		else
 		{
 			d->read_locks--;
-			filp->f_flags ^= F_OSPRD_LOCKED;
-			if (d->ticket_head < d->ticket_tail)
+		}
+
+		if (d->ticket_head < d->ticket_tail)
+		{
+			d->ticket_head++;
+			while (remove_ticket_node(d->ticket_ll, d->ticket_head))
 			{
 				d->ticket_head++;
-				while (remove_ticket_node(d->ticket_ll, d->ticket_head))
-				{
-					d->ticket_head++;
-				}
 			}
-			wake_up_all(&d->blockq);
-			osp_spin_unlock(&d->mutex);
 		}
-		r = 0;
+		wake_up_all(&d->blockq);
+		osp_spin_unlock(&d->mutex);
+		filp->f_flags ^= F_OSPRD_LOCKED;
+		return 0;
 
 	} else
-		r = -ENOTTY; /* unknown command */
+		return -ENOTTY; /* unknown command */
 	return r;
 }
 
