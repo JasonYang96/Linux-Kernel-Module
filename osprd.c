@@ -310,6 +310,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			eprintk("Attempting to write_lock\n");
 			if (d->current_write_pid == current->pid)
 			{
+				eprintk("Current process trying to write lock itself!");
 				insert_ticket_node(d->ticket_ll, ticket_local);
 				osp_spin_unlock(&d->mutex);
 				return -EDEADLK;
@@ -326,6 +327,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			}
 			d->write_locks++;
 			filp->f_flags |= F_OSPRD_LOCKED;
+			d->current_write_pid = current->pid;
 			osp_spin_unlock(&d->mutex);
 			eprintk("Received write_lock, write_locks:%d, ticket_local:%u\n", d->write_locks, ticket_local);
 		}
@@ -334,6 +336,7 @@ int osprd_ioctl(struct inode *inode, struct file *filp,
 			eprintk("Attempting to read_lock\n");
 			if (remove_read_node(d->read_ll, current->pid))
 			{
+				eprintk("Current process tyring to read_lock itself");
 				insert_ticket_node(d->ticket_ll, ticket_local);
 				osp_spin_unlock(&d->mutex);
 				return -EDEADLK;

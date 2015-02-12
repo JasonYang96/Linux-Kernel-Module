@@ -24,6 +24,6 @@ We have working implementations that should pass all 17 tests, or at least when 
 
 To test for simple deadlock cases, we ran these commands:
 #for write deadlock
-./osprdaccess -w -l hello.txt hello.txt
+echo answers.txt | ./osprdaccess -w -l /dev/osprda /dev/osprda
 #for read deadlock
-./osprdaccess -r -l hello.txt hello.txt
+./osprdaccess -r -l /dev/osprda /dev/osprda
